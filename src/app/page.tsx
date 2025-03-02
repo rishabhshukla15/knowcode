@@ -1,100 +1,103 @@
-import Image from "next/image";
+'use client';
+
+import { useState } from 'react';
+import CodeInput from './components/CodeInput';
+import CodeExplanation from './components/CodeExplanation';
+import { Toaster } from '@/components/ui/sonner';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [code, setCode] = useState<string>('');
+  const [explanation, setExplanation] = useState<string>('');
+  const [isExplaining, setIsExplaining] = useState<boolean>(false);
+  const [detectedLanguage, setDetectedLanguage] = useState<string>('');
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const handleCodeSubmit = async (submittedCode: string) => {
+    setIsExplaining(true);
+    setCode(submittedCode);
+    
+    try {
+      // Use Google Generative AI (Gemini)
+      const { GoogleGenerativeAI } = require("@google/generative-ai");
+      
+      // Initialize the API with your API key
+      // In production, use environment variables for API keys
+      const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      
+      // First, detect the programming language using Gemini
+      const languagePrompt = `Analyze this code and tell me what programming language it is. Respond with ONLY the language name (like "JavaScript", "Python", "Java", etc.) and nothing else:
+
+${submittedCode}`;
+      
+      const languageResult = await model.generateContent(languagePrompt);
+      const language = languageResult.response.text().trim();
+      setDetectedLanguage(language);
+      
+      // Then, create a prompt that asks for a dog-friendly explanation
+      const explanationPrompt = `Analyze the following ${language} code snippet and provide your analysis in two sections.
+
+[SYNTAX]
+List and explain every syntax element used in the code (e.g., keywords, operators, data types, functions, etc.). Provide a brief description for each element.
+
+[LOGIC]
+Explain the overall logic and flow of the code. Describe how the code works, what it does step-by-step, and how its components interact.
+
+
+Code snippet:
+${submittedCode}`;
+      
+      // Generate the explanation
+      const explanationResult = await model.generateContent(explanationPrompt);
+      const explanation = explanationResult.response.text();
+      
+      setExplanation(explanation);
+    } catch (error) {
+      console.error('Error generating explanation:', error);
+      setExplanation('Sorry, I had trouble explaining this code. Please try again! Woof!');
+      setDetectedLanguage('Unknown');
+    } finally {
+      setIsExplaining(false);
+    }
+  };
+
+
+  return (
+    <div className="min-h-screen p-6 pb-20 gap-8 sm:p-10 bg-background">
+      <Toaster />
+      <header className="mb-12 relative">
+        <div className="absolute right-0 top-0">
+          <ThemeToggle />
         </div>
+        <div className="text-center">
+          <h1 className="text-4xl font-bold mb-3 text-foreground">KnowCode</h1>
+          <p className="text-lg text-muted-foreground">
+            Paste your code and get a simple explanation that even a dog could understand!
+          </p>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto">
+        <CodeInput onCodeSubmit={handleCodeSubmit} />
+        
+        {isExplaining && (
+          <div className="flex justify-center my-8">
+            <div className="flex items-center bg-muted px-4 py-2 rounded-md">
+              <span className="mr-3 text-muted-foreground font-medium">Analyzing code</span>
+              <span className="h-2 w-2 bg-primary rounded-full mx-1 animate-bounce"></span>
+              <span className="h-2 w-2 bg-primary rounded-full mx-1 animate-bounce delay-75"></span>
+              <span className="h-2 w-2 bg-primary rounded-full mx-1 animate-bounce delay-150"></span>
+            </div>
+          </div>
+        )}
+
+        {!isExplaining && code && explanation && (
+          <CodeExplanation code={code} explanation={explanation} detectedLanguage={detectedLanguage} />
+        )}
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+
+      <footer className="mt-16 text-center text-sm text-muted-foreground">
+        <p>KnowCode - Making code understandable for everyone</p>
       </footer>
     </div>
   );
